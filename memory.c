@@ -2,41 +2,47 @@
 #include "log.h"
 #include "util.h"
 #include <stdio.h>
-#include <stdlib.h> // [수정] exit, EXIT_FAILURE 사용을 위해 필수
+#include <stdlib.h> // exit, EXIT_FAILURE 사용을 위해 필수
 
 // --- 헬퍼 함수들 (allocate_frame보다 먼저 정의되어야 함) ---
 
+// 스왑 아웃된 페이지의 정보를 페이지 테이블과 TLB에서 지웁니다.
 void invalidate_swapped_out_page(uint8_t pfn) {
     uint16_t vpn = frame_table[pfn].vpn_mapped;
     
-    // TLB 무효화
+    // 1. TLB 무효화 (Valid bit = 0)
     for (int i = 0; i < TLB_SIZE; i++) {
         if (tlb[i].valid && tlb[i].vpn == vpn) {
             tlb[i].valid = false;
         }
     }
 
-    // Page Table 무효화
+    // 2. Page Table 무효화 (Present bit = 0)
     uint16_t dummy_va = vpn << OFFSET_BITS;
     uint16_t dummy_vpn, dummy_offset;
     uint8_t pd1_idx, pd2_idx, pt_idx;
     
     split_va(dummy_va, &dummy_vpn, &dummy_offset, &pd1_idx, &pd2_idx, &pt_idx);
 
+    // PD1 탐색
     uint8_t current_pfn = root_pd_pfn;
     size_t pd1_addr = (size_t)current_pfn * FRAME_SIZE + (size_t)pd1_idx * PTE_SIZE;
     if (!(physical_memory[pd1_addr] & 0x80)) return;
     
+    // PD2 탐색
     current_pfn = physical_memory[pd1_addr] & 0x7F;
     size_t pd2_addr = (size_t)current_pfn * FRAME_SIZE + (size_t)pd2_idx * PTE_SIZE;
     if (!(physical_memory[pd2_addr] & 0x80)) return;
 
+    // PT 탐색 및 Present bit 클리어
     current_pfn = physical_memory[pd2_addr] & 0x7F;
     size_t pt_addr = (size_t)current_pfn * FRAME_SIZE + (size_t)pt_idx * PTE_SIZE;
     
-    physical_memory[pt_addr] &= 0x7F; // Present bit 클리어
+    physical_memory[pt_addr] &= 0x7F; 
 }
 
+
+// LRU/RR 헬퍼 함수
 void update_tlb_time(uint16_t vpn) {
     for (int i = 0; i < TLB_SIZE; i++) {
         if (tlb[i].valid && tlb[i].vpn == vpn) {
@@ -88,7 +94,7 @@ uint8_t get_lru_eviction_frame() {
     uint64_t min_time = -1;
     uint8_t lru_pfn = 0; 
 
-    for (uint8_t pfn = 3; pfn < NUM_FRAMES; pfn++) {
+    for (uint8_t pfn = 3; pfn < NUM_FRAMES; pfn++) { // 0,1,2 보호
         if (!frame_table[pfn].is_allocated) continue;
         if (frame_table[pfn].is_pagetable) continue;
 
@@ -100,7 +106,7 @@ uint8_t get_lru_eviction_frame() {
     return lru_pfn;
 }
 
-// --- 프레임 할당 (메인 함수) ---
+// --- 프레임 할당 (Eviction 포함) ---
 uint8_t allocate_frame(bool is_pagetable) {
     uint8_t new_pfn = 0;
 

@@ -32,7 +32,7 @@
 #define PT_ENTRY_COUNT 8            // Page Table 내 엔트리 수 (8 Bytes / 1 Byte)
 #define PTE_SIZE 1                  // Page Table Entry 크기 (1 Byte)
 
-// 물리 프레임 할당 시작 PFN (예시에서 0x000, 0x001 등을 제외하고 0x003부터 시작 가능성 언급)
+// 물리 프레임 할당 시작 PFN (0, 1은 예약, 2는 Root PD)
 #define FIRST_DATA_PFN 3            // 데이터 프레임 할당 시작 (운영체제 예약 영역 제외)
 
 //////////////////////////////////////////////////
@@ -52,7 +52,7 @@ typedef struct {
 
     // RR/LRU 정책 관리를 위한 필드
     uint64_t last_access_time; // LRU 정책용: 마지막 접근 시간
-    uint8_t rr_index;       // RR 정책용: 교체 순서 (사용하지 않아도 됨, next_rr_tlb로 관리)
+    uint8_t rr_index;       // RR 정책용: 교체 순서 (사용되지 않음)
 } TLBEntry;
 
 // 물리 프레임 메타데이터 구조체
@@ -63,7 +63,7 @@ typedef struct {
 
     // RR/LRU 정책 관리를 위한 필드
     uint64_t last_access_time; // LRU 정책용: 마지막 접근 시간
-    uint8_t rr_index;       // RR 정책용: 교체 순서 (사용하지 않아도 됨, next_rr_frame으로 관리)
+    uint8_t rr_index;       // RR 정책용: 교체 순서 (사용되지 않음)
 } FrameEntry;
 
 // 정책 구분용 Enum

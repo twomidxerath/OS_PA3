@@ -1,11 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
+#include <unistd.h> // getopt 함수 사용
 #include <string.h>
 #include "simulator.h"
 #include "log.h"
 
-// 전역 변수 실제 정의 (여기서 메모리가 할당됨)
+// 전역 변수 실제 정의
 ReplacementPolicy current_policy;
 uint64_t global_access_time = 0;
 
