@@ -17,6 +17,7 @@ extern FrameEntry frame_table[NUM_FRAMES];
 extern TLBEntry tlb[TLB_SIZE];
 extern uint8_t next_rr_tlb;     // RR TLB 교체용 포인터
 extern uint8_t next_rr_frame;   // RR Frame 교체용 포인터
+extern uint8_t next_free_frame; // [추가됨] 다음 빈 프레임 포인터
 
 // Root Page Directory의 PFN (모든 프로세스가 단일 프로세스이므로 전역으로 관리)
 extern uint8_t root_pd_pfn;
@@ -30,12 +31,6 @@ void translate_address(uint16_t va);             // 가상 주소(VA)를 처리�
 
 // 메모리 및 TLB 관리 함수 (내부적으로 호출)
 uint8_t allocate_frame(bool is_pagetable); // 새로운 물리 프레임 할당 (Swap 로직 포함)
-void update_lru_time(uint8_t pfn);         // 특정 프레임의 LRU 시간을 갱신
-void update_tlb_time(uint16_t vpn);         // 특정 TLB 엔트리의 LRU 시간을 갱신
-
-// simulator.h
-
-// ... (기존 선언 유지) ...
 
 // LRU 헬퍼 함수 선언 (memory.c에 구현됨)
 int get_lru_tlb_index();
