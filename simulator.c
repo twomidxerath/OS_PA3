@@ -32,15 +32,16 @@ void initialize_simulator(const char *policy_str) {
     memset(frame_table, 0, NUM_FRAMES * sizeof(FrameEntry));
     memset(tlb, 0, TLB_SIZE * sizeof(TLBEntry));
 
-    // 시스템 예약 프레임 (0, 1)
+    // 시스템 예약 프레임 (PFN 0, 1)
     frame_table[0].is_allocated = true;
     frame_table[1].is_allocated = true;
 
-    // Root Page Directory (2)
+    // Root Page Directory (PFN 2) 할당 (예시의 PFN 0x002는 PD1에 사용됨을 가정)
     root_pd_pfn = 2;
     frame_table[root_pd_pfn].is_allocated = true;
     frame_table[root_pd_pfn].is_pagetable = true; 
 
+    // PFN 3부터 데이터 페이지 및 동적 PT 할당 시작
     next_free_frame = FIRST_DATA_PFN; 
     next_rr_frame = FIRST_DATA_PFN; 
 }
@@ -113,11 +114,10 @@ PTE read_pte(uint8_t pfn, uint8_t index) {
 
 // 3단계 페이지 테이블 탐색
 bool page_table_lookup(uint16_t vpn, uint8_t *pfn_result) {
-    uint16_t dummy_va = vpn << OFFSET_BITS; // VPN 복원을 위한 더미 VA
+    uint16_t dummy_va = vpn << OFFSET_BITS;
     uint16_t dummy_vpn, dummy_offset;
     uint8_t pd1_idx, pd2_idx, pt_idx;
     
-    // 인덱스 추출
     split_va(dummy_va, &dummy_vpn, &dummy_offset, &pd1_idx, &pd2_idx, &pt_idx);
 
     // 1. PD1 탐색
@@ -150,33 +150,37 @@ void update_page_table_on_miss(uint16_t vpn, uint8_t data_pfn) {
     split_va(dummy_va, &dummy_vpn, &dummy_offset, &pd1_idx, &pd2_idx, &pt_idx);
 
     uint8_t current_pfn = root_pd_pfn;
-    PTE pd1_pte, pd2_pte;
     uint8_t next_pfn;
     
-    // PD1 -> PD2 연결
-    pd1_pte = read_pte(current_pfn, pd1_idx);
+    // 1. PD1 업데이트 경로
+    size_t pd1_loc_addr = (size_t)current_pfn * FRAME_SIZE + (size_t)pd1_idx * PTE_SIZE;
+    PTE pd1_pte = read_pte(current_pfn, pd1_idx);
+    
     if (!get_pte_present(pd1_pte)) {
         next_pfn = allocate_frame(true); 
-        PTE *pd1_loc = (PTE*)&physical_memory[current_pfn * FRAME_SIZE + pd1_idx * PTE_SIZE];
+        PTE *pd1_loc = (PTE*)&physical_memory[pd1_loc_addr];
         set_pte_entry(pd1_loc, next_pfn);
         current_pfn = next_pfn;
     } else {
         current_pfn = get_pte_pfn(pd1_pte);
     }
     
-    // PD2 -> PT 연결
-    pd2_pte = read_pte(current_pfn, pd2_idx);
+    // 2. PD2 업데이트 경로
+    size_t pd2_loc_addr = (size_t)current_pfn * FRAME_SIZE + (size_t)pd2_idx * PTE_SIZE;
+    PTE pd2_pte = read_pte(current_pfn, pd2_idx);
+    
     if (!get_pte_present(pd2_pte)) {
         next_pfn = allocate_frame(true);
-        PTE *pd2_loc = (PTE*)&physical_memory[current_pfn * FRAME_SIZE + pd2_idx * PTE_SIZE];
+        PTE *pd2_loc = (PTE*)&physical_memory[pd2_loc_addr];
         set_pte_entry(pd2_loc, next_pfn);
         current_pfn = next_pfn;
     } else {
         current_pfn = get_pte_pfn(pd2_pte);
     }
 
-    // PT -> Data Page 연결
-    PTE *pt_loc = (PTE*)&physical_memory[current_pfn * FRAME_SIZE + pt_idx * PTE_SIZE];
+    // 3. 최종 Page Table (PT) 업데이트
+    size_t pt_loc_addr = (size_t)current_pfn * FRAME_SIZE + (size_t)pt_idx * PTE_SIZE;
+    PTE *pt_loc = (PTE*)&physical_memory[pt_loc_addr];
     set_pte_entry(pt_loc, data_pfn);
     
     frame_table[data_pfn].vpn_mapped = vpn; 
@@ -208,6 +212,8 @@ void translate_address(uint16_t va) {
     
     // 2. Page Table Lookup
     if (page_table_lookup(vpn, &pfn_result)) {
+        // Page Table Hit (TLB Miss, PT Hit)
+        
         if (current_policy == POLICY_LRU) {
             update_frame_time(pfn_result);
         }
@@ -219,14 +225,18 @@ void translate_address(uint16_t va) {
         return;
     }
     
+    // Page Table Miss (Page Fault)
     log_pt_miss(vpn);
     
     // 3. Page Swap & Update
-    uint8_t new_data_pfn = allocate_frame(false); 
+    uint8_t new_data_pfn = allocate_frame(false); // 데이터 페이지 할당
+    
+    // **[수정]** 로그 기록 및 PTE 업데이트
+    log_pt_update(vpn, new_data_pfn); // 누락된 Page Table Update 로그 기록
     
     update_page_table_on_miss(vpn, new_data_pfn);
     
-    log_pt_update(vpn, new_data_pfn);
+    // TLB 업데이트
     log_tlb_update(vpn, new_data_pfn);
     tlb_update(vpn, new_data_pfn);
 
