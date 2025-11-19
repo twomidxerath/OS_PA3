@@ -1,40 +1,37 @@
 #ifndef SIMULATOR_H
 #define SIMULATOR_H
 
-#include "types.h" // 위에 정의한 타입들을 포함
-#include "log.h"   // 로깅 함수 포함
+#include "types.h"
+#include "log.h"
 #include <stdio.h>
 
-// 시뮬레이터 전역 상태
-extern ReplacementPolicy current_policy; // 현재 교체 정책 (RR/LRU)
-extern uint64_t global_access_time;     // LRU 관리를 위한 전역 시간 카운터
+// 시뮬레이터 전역 상태 (main.c에 정의됨)
+extern ReplacementPolicy current_policy; 
+extern uint64_t global_access_time;     
 
-// 물리 메모리 시뮬레이션 및 메타데이터 (Frame Table)
+// 물리 메모리 및 메타데이터 (simulator.c에 정의됨)
 extern uint8_t physical_memory[NUM_FRAMES * FRAME_SIZE];
 extern FrameEntry frame_table[NUM_FRAMES];
 
-// TLB 및 RR/LRU 포인터
+// TLB 및 포인터 (simulator.c에 정의됨)
 extern TLBEntry tlb[TLB_SIZE];
-extern uint8_t next_rr_tlb;     // RR TLB 교체용 포인터
-extern uint8_t next_rr_frame;   // RR Frame 교체용 포인터
-extern uint8_t next_free_frame; // [추가됨] 다음 빈 프레임 포인터
-
-// Root Page Directory의 PFN (모든 프로세스가 단일 프로세스이므로 전역으로 관리)
+extern uint8_t next_rr_tlb;
+extern uint8_t next_rr_frame;
+extern uint8_t next_free_frame; // [수정] memory.c에서 사용하기 위해 추가
 extern uint8_t root_pd_pfn;
 
+// 함수 선언
+void initialize_simulator(const char *policy_str);
+void simulate_accesses(const char *input_file);
+void translate_address(uint16_t va);
 
-// 핵심 시뮬레이터 함수
-void initialize_simulator(const char *policy_str); // 시뮬레이터 초기화 및 정책 설정
-void simulate_accesses(const char *input_file);   // 입력 파일 읽기 및 주소 접근 시뮬레이션
-void translate_address(uint16_t va);             // 가상 주소(VA)를 처리하는 주 로직
+// 메모리 관리 함수 (memory.c)
+uint8_t allocate_frame(bool is_pagetable); 
 
-
-// 메모리 및 TLB 관리 함수 (내부적으로 호출)
-uint8_t allocate_frame(bool is_pagetable); // 새로운 물리 프레임 할당 (Swap 로직 포함)
-
-// LRU 헬퍼 함수 선언 (memory.c에 구현됨)
+// LRU/RR 헬퍼 함수 (memory.c) - 순서 문제 해결을 위해 선언 추가
 int get_lru_tlb_index();
 uint8_t get_lru_eviction_frame();
+uint8_t get_rr_eviction_frame(); // [수정] 추가됨
 void update_tlb_time(uint16_t vpn);
 void update_frame_time(uint8_t pfn);
 
