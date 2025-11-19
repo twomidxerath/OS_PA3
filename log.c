@@ -39,3 +39,4 @@ void log_pt_miss(uint16_t vpn) { fprintf(log_fp, "Page Table Miss: VPN 0x%03x\n"
 void log_pt_update(uint16_t vpn, uint16_t pfn) { fprintf(log_fp, "Page Table Update: VPN 0x%03x -> PFN 0x%03x\n", vpn, pfn); }
 void log_tlb_update(uint16_t vpn, uint16_t pfn) { fprintf(log_fp, "TLB Update: VPN 0x%03x -> PFN 0x%03x\n", vpn, pfn); }
 void log_pa_result(uint16_t pa) { fprintf(log_fp, "PA: 0x%03x\n\n", pa); }
+
