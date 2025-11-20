@@ -60,8 +60,9 @@ void simulate_accesses(const char *input_file) {
         if (fscanf(fp, "%hx", &va) != 1) {
             break;
         }
-        // [중요] 외부 접근 시 최초 Access VA 로그 출력
-        log_va_access(va);
+        
+        // [핵심] Access VA 로그는 여기서 호출하지 않고 translate_address 내부에서 호출합니다.
+        // 그래야 재접근(Access again) 시에도 로그가 찍혀 예시와 일치합니다.
         translate_address(va);
         global_access_time++; 
     }
@@ -168,40 +169,53 @@ void update_page_table_on_miss(uint16_t vpn, uint8_t data_pfn) {
 void translate_address(uint16_t va) {
     uint16_t vpn = va >> OFFSET_BITS;
     uint16_t offset = va & ((1 << OFFSET_BITS) - 1);
-    uint8_t pfn;
+    uint8_t pfn_result;
+    
+    // [수정] 함수 진입 시 로그 출력 (처음 호출 + 재귀 호출 모두 커버)
+    log_va_access(va);
     
     // 1. TLB Lookup
-    if (tlb_lookup(vpn, &pfn)) {
-        log_tlb_hit(vpn, pfn);
+    if (tlb_lookup(vpn, &pfn_result)) {
+        log_tlb_hit(vpn, pfn_result);
+        
         if (current_policy == POLICY_LRU) {
             update_tlb_time(vpn); 
-            update_frame_time(pfn); 
+            update_frame_time(pfn_result); 
         }
-        log_pa_result((pfn << OFFSET_BITS) | offset);
+        
+        uint16_t pa = (pfn_result << OFFSET_BITS) | offset;
+        log_pa_result(pa);
         return; 
     }
+    
     log_tlb_miss(vpn);
     
     // 2. Page Table Lookup
-    if (page_table_lookup(vpn, &pfn)) {
-        if (current_policy == POLICY_LRU) update_frame_time(pfn);
-        log_tlb_update(vpn, pfn);
-        tlb_update(vpn, pfn);
+    if (page_table_lookup(vpn, &pfn_result)) {
+        if (current_policy == POLICY_LRU) {
+            update_frame_time(pfn_result);
+        }
         
-        log_va_access(va); // 재접근 로그
-        translate_address(va);
+        log_tlb_update(vpn, pfn_result);
+        tlb_update(vpn, pfn_result);
+        
+        translate_address(va); // 재접근
         return;
     }
+    
     log_pt_miss(vpn);
     
-    // 3. Page Swap
+    // 3. Page Swap & Update
+    // [핵심] 데이터 프레임을 먼저 할당하여 PFN 순서를 맞춤 (예: 0x003)
     uint8_t new_pfn = allocate_frame(false); 
+    
     log_pt_update(vpn, new_pfn); 
+    
+    // 페이지 테이블 구조체 업데이트 (PD2, PT 프레임 할당이 여기서 발생)
     update_page_table_on_miss(vpn, new_pfn);
     
     log_tlb_update(vpn, new_pfn);
-    tlb_update(vpn, new_pfn); // [수정완료] 변수명 new_pfn으로 통일
+    tlb_update(vpn, new_pfn); 
 
-    log_va_access(va); // 재접근 로그
-    translate_address(va);
+    translate_address(va); // 재접근
 }

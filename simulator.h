@@ -17,10 +17,10 @@ extern FrameEntry frame_table[NUM_FRAMES];
 extern TLBEntry tlb[TLB_SIZE];
 extern uint8_t next_rr_tlb;
 extern uint8_t next_rr_frame;
-extern uint8_t next_free_frame; 
+extern uint8_t next_free_frame; // memory.c에서 접근하기 위해 추가
 extern uint8_t root_pd_pfn;
 
-// 핵심 시뮬레이터 함수 (simulator.c)
+// 핵심 시뮬레이터 함수
 void initialize_simulator(const char *policy_str);
 void simulate_accesses(const char *input_file);
 void translate_address(uint16_t va);
